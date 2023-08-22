@@ -71,42 +71,38 @@ contract YourContract is Ownable {
         emit UpdateBuilder(_builder, _cap);
     }
 
-    function streamWithdraw(uint256 _amount, string memory _reason) public {
-
-        IERC20 token;
+    function streamWithdraw(uint256 _amount, string memory _reason) external {
+        require(_amount > 0, "No withdraw amount given");
         BuilderStreamInfo storage builderStream = streamedBuilders[msg.sender];
-        
-        if(builderStream.optionalTokenAddress == address(0)){
-            require(address(this).balance >= _amount, "Not enough funds in the contract");
-        }else{
-            token = IERC20(builderStream.optionalTokenAddress);
-            require(token.balanceOf(address(this)) >= _amount, "Not enough tokens in the contract");
-        }
-        
-        require(builderStream.cap > 0, "No active stream for builder");
-        
 
         uint256 totalAmountCanWithdraw = unlockedBuilderAmount(msg.sender);
-        require(totalAmountCanWithdraw >= _amount,"Not enough in the stream");
+        require(totalAmountCanWithdraw > 0 && totalAmountCanWithdraw >= _amount, "Not enough in the stream");
 
         uint256 cappedLast = block.timestamp - frequency;
-        if (builderStream.last < cappedLast){
+        if (builderStream.last < cappedLast) {
             builderStream.last = cappedLast;
         }
 
-        builderStream.last = builderStream.last + ((block.timestamp - builderStream.last) * _amount / totalAmountCanWithdraw);
-
-        if(builderStream.optionalTokenAddress == address(0)){
-
-            (bool sent,) = msg.sender.call{value: _amount}("");
+        builderStream.last =
+            builderStream.last +
+            (((block.timestamp - builderStream.last) * _amount) /
+                totalAmountCanWithdraw);
+                
+        if (builderStream.optionalTokenAddress == address(0)) {
+            require(
+                address(this).balance >= _amount,
+                "Not enough funds in the contract"
+            );
+            (bool sent, ) = msg.sender.call{value: _amount}("");
             require(sent, "Failed to send Ether");
-
-        }else{
-
+        } else {
+            IERC20 token = IERC20(builderStream.optionalTokenAddress);
+            require(
+                token.balanceOf(address(this)) >= _amount,
+                "Not enough tokens in the contract"
+            );
             token.transfer(msg.sender, _amount);
-            
         }
-        
 
         emit Withdraw(msg.sender, _amount, _reason);
     }
